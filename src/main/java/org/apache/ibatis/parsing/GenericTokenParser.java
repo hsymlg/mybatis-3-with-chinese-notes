@@ -30,6 +30,7 @@ public class GenericTokenParser {
     this.handler = handler;
   }
 
+  //经过一段复杂的解析过程
   public String parse(String text) {
     if (text == null || text.isEmpty()) {
       return "";
@@ -43,6 +44,7 @@ public class GenericTokenParser {
     int offset = 0;
     final StringBuilder builder = new StringBuilder();
     StringBuilder expression = null;
+    //遍历里面所有的#{} select ?  ,#{id1} ${}
     do {
       if (start > 0 && src[start - 1] == '\\') {
         // this open token is escaped. remove the backslash and continue.

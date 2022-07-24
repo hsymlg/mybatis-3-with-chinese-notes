@@ -91,12 +91,15 @@ public class XMLMapperBuilder extends BaseBuilder {
   }
 
   public void parse() {
+    //判断文件是否之前解析过
     if (!configuration.isResourceLoaded(resource)) {
+      //解析mapper文件节点
       configurationElement(parser.evalNode("/mapper"));
       configuration.addLoadedResource(resource);
+      //绑定Namespace里面的Class对象
       bindMapperForNamespace();
     }
-
+    //重新解析之前解析不了的节点。
     parsePendingResultMaps();
     parsePendingCacheRefs();
     parsePendingStatements();
@@ -106,18 +109,28 @@ public class XMLMapperBuilder extends BaseBuilder {
     return sqlFragments.get(refid);
   }
 
+  //解析mapper文件里面的节点
+  //拿到里面配置的配置项 最终封装成一个MapperedStatemanet
   private void configurationElement(XNode context) {
     try {
+      //获取命名空间 namespace，这个很重要，后期mybatis会通过这个动态代理我们的Mapper接口
       String namespace = context.getStringAttribute("namespace");
       if (namespace == null || namespace.isEmpty()) {
+        //如果namespace为空则抛一个异常
         throw new BuilderException("Mapper's namespace cannot be empty");
       }
       builderAssistant.setCurrentNamespace(namespace);
+      //解析缓存节点
       cacheRefElement(context.evalNode("cache-ref"));
       cacheElement(context.evalNode("cache"));
+      //解析parameterMap（过时）和resultMap  <resultMap></resultMap>
       parameterMapElement(context.evalNodes("/mapper/parameterMap"));
       resultMapElements(context.evalNodes("/mapper/resultMap"));
+      //解析<sql>节点
+      //<sql id="staticSql">select * from test</sql>
+      //<select> <include refid="staticSql"></select>
       sqlElement(context.evalNodes("/mapper/sql"));
+      //解析增删改查节点<select> <insert> <update> <delete>
       buildStatementFromContext(context.evalNodes("select|insert|update|delete"));
     } catch (Exception e) {
       throw new BuilderException("Error parsing Mapper XML. The XML location is '" + resource + "'. Cause: " + e, e);
@@ -128,6 +141,7 @@ public class XMLMapperBuilder extends BaseBuilder {
     if (configuration.getDatabaseId() != null) {
       buildStatementFromContext(list, configuration.getDatabaseId());
     }
+    //解析xml
     buildStatementFromContext(list, null);
   }
 
@@ -135,8 +149,10 @@ public class XMLMapperBuilder extends BaseBuilder {
     for (XNode context : list) {
       final XMLStatementBuilder statementParser = new XMLStatementBuilder(configuration, builderAssistant, context, requiredDatabaseId);
       try {
+        //解析xml节点
         statementParser.parseStatementNode();
       } catch (IncompleteElementException e) {
+        //xml语句有问题时 存储到集合中 等解析完能解析的再重新解析
         configuration.addIncompleteStatement(statementParser);
       }
     }

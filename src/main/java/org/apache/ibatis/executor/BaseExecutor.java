@@ -45,6 +45,9 @@ import org.apache.ibatis.transaction.Transaction;
 import org.apache.ibatis.type.TypeHandlerRegistry;
 
 /**
+ * SimpleExecutor、ReuseExecutor、BatchExecutor 均继承自 BaseExecutor。
+ * BaseExecutor 实现了 Executor 的全部方法，对缓存、事务、连接处理等提供了一些模板方法，
+ * 但是针对具体的数据库操作留下了四个抽象方法（里面的abstract）交由子类实现。
  * @author Clinton Begin
  */
 public abstract class BaseExecutor implements Executor {
@@ -107,13 +110,16 @@ public abstract class BaseExecutor implements Executor {
     return closed;
   }
 
+  //执行 update 等其它操作时，则会首先清除本地的一级缓存再交由子类执行具体的操作
   @Override
   public int update(MappedStatement ms, Object parameter) throws SQLException {
     ErrorContext.instance().resource(ms.getResource()).activity("executing an update").object(ms.getId());
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
+    // 清空本地缓存
     clearLocalCache();
+    // 调用子类执行器逻辑
     return doUpdate(ms, parameter);
   }
 
@@ -144,15 +150,23 @@ public abstract class BaseExecutor implements Executor {
       throw new ExecutorException("Executor was closed.");
     }
     if (queryStack == 0 && ms.isFlushCacheRequired()) {
+      // 非嵌套查询且设置强制刷新时清除缓存
       clearLocalCache();
     }
     List<E> list;
+    /**
+     * 执行查询时 MyBatis 首先会根据 CacheKey 查询本地缓存，CacheKey 由本次查询的参数生成，
+     * 本地缓存由 PerpetualCache 实现，这就是 MyBatis 的一级缓存。一级缓存维护对象 localCache 是基础执行器的本地变量，
+     * 因此只有相同 sql 会话的查询才能共享一级缓存。当一级缓存中没有对应的数据，基础执行器最终会调用 doQuery 方法交由子类去获取数据。
+     */
     try {
       queryStack++;
       list = resultHandler == null ? (List<E>) localCache.getObject(key) : null;
       if (list != null) {
+        // 缓存不为空，组装存储过程出参
         handleLocallyCachedOutputParameters(ms, key, parameter, boundSql);
       } else {
+        // 无本地缓存，执行数据库查询
         list = queryFromDatabase(ms, parameter, rowBounds, resultHandler, key, boundSql);
       }
     } finally {
@@ -166,6 +180,7 @@ public abstract class BaseExecutor implements Executor {
       deferredLoads.clear();
       if (configuration.getLocalCacheScope() == LocalCacheScope.STATEMENT) {
         // issue #482
+        // 全局配置语句不共享缓存
         clearLocalCache();
       }
     }
@@ -267,13 +282,25 @@ public abstract class BaseExecutor implements Executor {
     }
   }
 
+  /**
+   * 更新
+   */
   protected abstract int doUpdate(MappedStatement ms, Object parameter) throws SQLException;
 
+  /**
+   * 刷新 statement
+   */
   protected abstract List<BatchResult> doFlushStatements(boolean isRollback) throws SQLException;
 
+  /**
+   * 查询
+   */
   protected abstract <E> List<E> doQuery(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql)
       throws SQLException;
 
+  /**
+   * 查询获取游标对象
+   */
   protected abstract <E> Cursor<E> doQueryCursor(MappedStatement ms, Object parameter, RowBounds rowBounds, BoundSql boundSql)
       throws SQLException;
 
@@ -301,14 +328,19 @@ public abstract class BaseExecutor implements Executor {
     StatementUtil.applyTransactionTimeout(statement, statement.getQueryTimeout(), transaction.getTimeout());
   }
 
+  /**
+   * 查询本地缓存，组装存储过程结果集
+   */
   private void handleLocallyCachedOutputParameters(MappedStatement ms, CacheKey key, Object parameter, BoundSql boundSql) {
     if (ms.getStatementType() == StatementType.CALLABLE) {
+      // 存储过程类型，查询缓存
       final Object cachedParameter = localOutputParameterCache.getObject(key);
       if (cachedParameter != null && parameter != null) {
         final MetaObject metaCachedParameter = configuration.newMetaObject(cachedParameter);
         final MetaObject metaParameter = configuration.newMetaObject(parameter);
         for (ParameterMapping parameterMapping : boundSql.getParameterMappings()) {
           if (parameterMapping.getMode() != ParameterMode.IN) {
+            // 参数类型为 OUT 或 INOUT 的，组装结果集
             final String parameterName = parameterMapping.getProperty();
             final Object cachedValue = metaCachedParameter.getValue(parameterName);
             metaParameter.setValue(parameterName, cachedValue);
@@ -318,16 +350,23 @@ public abstract class BaseExecutor implements Executor {
     }
   }
 
+  /**
+   * 查询数据库获取结果集
+   */
   private <E> List<E> queryFromDatabase(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
     List<E> list;
+    // 放一个 placeHolder 标志
     localCache.putObject(key, EXECUTION_PLACEHOLDER);
     try {
+      // 执行查询
       list = doQuery(ms, parameter, rowBounds, resultHandler, boundSql);
     } finally {
       localCache.removeObject(key);
     }
+    // 查询结果集放入本地缓存
     localCache.putObject(key, list);
     if (ms.getStatementType() == StatementType.CALLABLE) {
+      // 如果是存储过程查询，将存储过程结果集放入本地缓存
       localOutputParameterCache.putObject(key, parameter);
     }
     return list;

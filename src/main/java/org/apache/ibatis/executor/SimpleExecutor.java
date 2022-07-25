@@ -32,6 +32,8 @@ import org.apache.ibatis.session.RowBounds;
 import org.apache.ibatis.transaction.Transaction;
 
 /**
+ * 简单执行器是 MyBatis 的默认执行器。
+ * 其封装了对 JDBC 的操作，对于查询方法 doQuery 的实现如下，其主要包括创建 statement 处理器、创建 statement、执行查询、关闭 statement。
  * @author Clinton Begin
  */
 public class SimpleExecutor extends BaseExecutor {
@@ -58,10 +60,14 @@ public class SimpleExecutor extends BaseExecutor {
     Statement stmt = null;
     try {
       Configuration configuration = ms.getConfiguration();
+      // 创建 statement 处理器
       StatementHandler handler = configuration.newStatementHandler(wrapper, ms, parameter, rowBounds, resultHandler, boundSql);
+      // 创建 statement
       stmt = prepareStatement(handler, ms.getStatementLog());
+      // 执行查询
       return handler.query(stmt, resultHandler);
     } finally {
+      // 关闭 statement
       closeStatement(stmt);
     }
   }

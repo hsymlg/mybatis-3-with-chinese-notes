@@ -48,7 +48,7 @@ import org.apache.ibatis.util.MapUtil;
 /**
  * This class represents a cached set of class definition information that
  * allows for easy mapping between property names and getter/setter methods.
- *
+ * MyBatis 提供 Reflector 类来缓存类的字段名和 getter/setter 方法的元信息，使得反射时有更好的性能。
  * @author Clinton Begin
  */
 public class Reflector {
@@ -67,17 +67,24 @@ public class Reflector {
 
   public Reflector(Class<?> clazz) {
     type = clazz;
+    // 如果存在，记录无参构造方法
     addDefaultConstructor(clazz);
     Method[] classMethods = getClassMethods(clazz);
     if (isRecord(type)) {
       addRecordGetMethods(classMethods);
     } else {
+      // 记录字段名与get方法、get方法返回值的映射关系
       addGetMethods(classMethods);
+      // 记录字段名与set方法、set方法参数的映射关系
       addSetMethods(classMethods);
+      // 针对没有getter/setter方法的字段，通过Filed对象的反射来设置和读取字段值
       addFields(clazz);
     }
+    // 可读的字段名
     readablePropertyNames = getMethods.keySet().toArray(new String[0]);
+    // 可写的字段名
     writablePropertyNames = setMethods.keySet().toArray(new String[0]);
+    // 保存一份所有字段名大写与原始字段名的隐射
     for (String propName : readablePropertyNames) {
       caseInsensitivePropertyMap.put(propName.toUpperCase(Locale.ENGLISH), propName);
     }
@@ -98,15 +105,23 @@ public class Reflector {
   }
 
   private void addGetMethods(Method[] methods) {
+    // 字段名-get方法
     Map<String, List<Method>> conflictingGetters = new HashMap<>();
     Arrays.stream(methods).filter(m -> m.getParameterTypes().length == 0 && PropertyNamer.isGetter(m.getName()))
+      //由get属性获取对应的字段名（去除前缀，首字母转小写）
       .forEach(m -> addMethodConflict(conflictingGetters, PropertyNamer.methodToProperty(m.getName()), m));
+    // 保证每个字段只对应一个get方法
     resolveGetterConflicts(conflictingGetters);
   }
 
+  /**
+   * 对 getter/setter 方法进行去重是通过类似 java.lang.String#getSignature:java.lang.reflect.Method 的方法签名来实现的，如果子类在实现过程中，
+   * 参数、返回值使用了不同的类型（使用原类型的子类），则会导致方法签名不一致，同一字段就会对应不同的 getter/setter 方法，因此需要进行去重。
+   */
   private void resolveGetterConflicts(Map<String, List<Method>> conflictingGetters) {
     for (Entry<String, List<Method>> entry : conflictingGetters.entrySet()) {
       Method winner = null;
+      // 属性名
       String propName = entry.getKey();
       boolean isAmbiguous = false;
       for (Method candidate : entry.getValue()) {
@@ -114,17 +129,21 @@ public class Reflector {
           winner = candidate;
           continue;
         }
+        // 字段对应了多个get方法
         Class<?> winnerType = winner.getReturnType();
         Class<?> candidateType = candidate.getReturnType();
         if (candidateType.equals(winnerType)) {
+          // 返回值类型相同
           if (!boolean.class.equals(candidateType)) {
             isAmbiguous = true;
             break;
           } else if (candidate.getName().startsWith("is")) {
+            // 返回值为boolean的get方法可能有多个，如getIsSave和isSave，优先取is开头的
             winner = candidate;
           }
         } else if (candidateType.isAssignableFrom(winnerType)) {
           // OK getter type is descendant
+          // 可能会出现接口中的方法返回值是List，子类实现方法返回值是ArrayList，使用子类返回值方法
         } else if (winnerType.isAssignableFrom(candidateType)) {
           winner = candidate;
         } else {
@@ -132,6 +151,7 @@ public class Reflector {
           break;
         }
       }
+      // 记录字段名对应的get方法对象和返回值类型
       addGetMethod(propName, winner, isAmbiguous);
     }
   }

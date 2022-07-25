@@ -686,8 +686,16 @@ public class Configuration {
     return resultSetHandler;
   }
 
+  /**
+   * 创建 statement 处理器
+   * 实际每次创建的 statement 处理器对象都是由 RoutingStatementHandler 创建的，
+   * RoutingStatementHandler 根据当前 MappedStatement 的类型创建具体的 statement 类型处理器。
+   * StatementType 定义了 3 个 statement 类型枚举，分别对应 JDBC 的普通语句、预编译语句和存储过程语句。
+   */
   public StatementHandler newStatementHandler(Executor executor, MappedStatement mappedStatement, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) {
+    // StatementHandler 包装对象，根据 statement 类型创建代理处理器，并将实际操作委托给代理处理器处理
     StatementHandler statementHandler = new RoutingStatementHandler(executor, mappedStatement, parameterObject, rowBounds, resultHandler, boundSql);
+    // 应用插件
     statementHandler = (StatementHandler) interceptorChain.pluginAll(statementHandler);
     return statementHandler;
   }
@@ -696,7 +704,16 @@ public class Configuration {
     return newExecutor(transaction, defaultExecutorType);
   }
 
+  /**
+   * 在创建 sql 会话时，MyBatis 会调用 Configuration#newExecutor 方法创建执行器。枚举类 ExecutorType 定义了三种执行器类型，
+   * 即 SIMPLE、REUSE 和 Batch，这些执行器的主要区别在于：
+   * SIMPLE 在每次执行完成后都会关闭 statement 对象；
+   * REUSE 会在本地维护一个容器，当前 statement 创建完成后放入容器中，当下次执行相同的 sql 时会复用 statement 对象，执行完毕后也不会关闭；
+   * BATCH 会将修改操作记录在本地，等待程序触发或有下一次查询时才批量执行修改操作。
+   * 执行器创建后，如果全局缓存配置是有效的，则会将执行器装饰为 CachingExecutor
+   */
   public Executor newExecutor(Transaction transaction, ExecutorType executorType) {
+    // 默认类型为 simple
     executorType = executorType == null ? defaultExecutorType : executorType;
     Executor executor;
     if (ExecutorType.BATCH == executorType) {
@@ -707,8 +724,10 @@ public class Configuration {
       executor = new SimpleExecutor(this, transaction);
     }
     if (cacheEnabled) {
+      // 如果全局缓存打开，使用 CachingExecutor 代理执行器
       executor = new CachingExecutor(executor);
     }
+    // 应用插件
     executor = (Executor) interceptorChain.pluginAll(executor);
     return executor;
   }

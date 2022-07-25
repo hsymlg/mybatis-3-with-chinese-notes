@@ -34,6 +34,10 @@ import org.apache.ibatis.session.RowBounds;
 import org.apache.ibatis.transaction.Transaction;
 
 /**
+ * ReuseExecutor 相对于 SimpleExecutor 实现了对 statment 对象的复用，
+ * 其在本地维护了 statementMap 用于保存 sql 语句和 statement 对象的关系。
+ * 当调用 prepareStatement 方法获取 statement 对象时首先会查找本地是否有对应的 statement 对象，如果有则进行复用，
+ * 负责重新创建并将 statement 对象放入本地缓存。
  * @author Clinton Begin
  */
 public class ReuseExecutor extends BaseExecutor {
@@ -68,6 +72,7 @@ public class ReuseExecutor extends BaseExecutor {
     return handler.queryCursor(stmt);
   }
 
+  //提交或回滚会导致执行器调用 doFlushStatements 方法，复用执行器会因此批量关闭本地的 statement 对象。
   @Override
   public List<BatchResult> doFlushStatements(boolean isRollback) {
     for (Statement stmt : statementMap.values()) {
@@ -77,11 +82,13 @@ public class ReuseExecutor extends BaseExecutor {
     return Collections.emptyList();
   }
 
+  //创建 statement 对象
   private Statement prepareStatement(StatementHandler handler, Log statementLog) throws SQLException {
     Statement stmt;
     BoundSql boundSql = handler.getBoundSql();
     String sql = boundSql.getSql();
     if (hasStatementFor(sql)) {
+      // 如果本地容器中包含当前 sql 对应的 statement 对象，进行复用
       stmt = getStatement(sql);
       applyTransactionTimeout(stmt);
     } else {

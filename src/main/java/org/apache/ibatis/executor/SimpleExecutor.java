@@ -91,7 +91,9 @@ public class SimpleExecutor extends BaseExecutor {
     // 获取数据库连接
     Statement stmt;
     Connection connection = getConnection(statementLog);
+    // 创建 statement 对象
     stmt = handler.prepare(connection, transaction.getTimeout());
+    // 设置 statement 参数
     handler.parameterize(stmt);
     return stmt;
   }

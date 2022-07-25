@@ -68,10 +68,15 @@ public class SimpleStatementHandler extends BaseStatementHandler {
     statement.addBatch(sql);
   }
 
+  /**
+   * 创建 statement 对象完成即可通过 JDBC 的 API 执行数据库查询，并从 statement 对象中获取查询结果，根据配置进行转换
+   */
   @Override
   public <E> List<E> query(Statement statement, ResultHandler resultHandler) throws SQLException {
     String sql = boundSql.getSql();
+    // 执行查询
     statement.execute(sql);
+    // 处理结果集
     return resultSetHandler.handleResultSets(statement);
   }
 

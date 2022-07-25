@@ -45,11 +45,15 @@ public class MapperProxyFactory<T> {
 
   @SuppressWarnings("unchecked")
   protected T newInstance(MapperProxy<T> mapperProxy) {
+    //jdk自带的动态代理
     return (T) Proxy.newProxyInstance(mapperInterface.getClassLoader(), new Class[] { mapperInterface }, mapperProxy);
   }
 
   public T newInstance(SqlSession sqlSession) {
+    //首先会调用这个newInstance方法
+    //动态代理逻辑在MapperProxy里面
     final MapperProxy<T> mapperProxy = new MapperProxy<>(sqlSession, mapperInterface, methodCache);
+    //通过这里调用下面的newInstance方法
     return newInstance(mapperProxy);
   }
 

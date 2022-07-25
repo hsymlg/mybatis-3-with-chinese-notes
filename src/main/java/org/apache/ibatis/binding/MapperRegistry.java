@@ -40,8 +40,13 @@ public class MapperRegistry {
     this.config = config;
   }
 
+  //示例代码：DemoMapper mapper = sqlSession.getMapper(DemoMapper.class);
+  //getMapper方法最终会调用到这里，这个是MapperRegistry的getMapper方法
+  //可以看到这里mapperProxyFactory对象会从一个叫做knownMappers的对象中以type为key取出值，
+  //这个knownMappers是一个HashMap，存放了我们的DemoMapper对象，而这里的type，就是我们上面写的Mapper接口。
   @SuppressWarnings("unchecked")
   public <T> T getMapper(Class<T> type, SqlSession sqlSession) {
+    //MapperProxyFactory  在解析的时候会生成一个map  map中会有我们的DemoMapper的Class
     final MapperProxyFactory<T> mapperProxyFactory = (MapperProxyFactory<T>) knownMappers.get(type);
     if (mapperProxyFactory == null) {
       throw new BindingException("Type " + type + " is not known to the MapperRegistry.");

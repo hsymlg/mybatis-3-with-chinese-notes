@@ -79,10 +79,18 @@ public class MapperProxy<T> implements InvocationHandler, Serializable {
 
   @Override
   public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    //这就是一个很标准的JDK动态代理了
+    //执行的时候会调用invoke方法
     try {
       if (Object.class.equals(method.getDeclaringClass())) {
+        //判断方法所属的类
+        //是不是调用的Object默认的方法
+        //如果是  则不代理，不改变原先方法的行为
         return method.invoke(this, args);
       } else {
+        //对于默认方法的处理
+        //判断是否为default方法，即接口中定义的默认方法。
+        //如果是接口中的默认方法则把方法绑定到代理对象中然后调用。
         return cachedInvoker(method).invoke(proxy, method, args, sqlSession);
       }
     } catch (Throwable t) {

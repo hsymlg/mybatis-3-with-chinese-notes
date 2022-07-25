@@ -455,6 +455,8 @@ public class XMLMapperBuilder extends BaseBuilder {
         // to prevent loading again this resource from the mapper interface
         // look at MapperAnnotationBuilder#loadXmlResource
         configuration.addLoadedResource("namespace:" + namespace);
+        //这里将接口class传入
+        //bindMapperForNamespace方法，而就是这个方法帮我们完成了knownMappers的生成，并且将我们的Mapper接口put进去
         configuration.addMapper(boundType);
       }
     }

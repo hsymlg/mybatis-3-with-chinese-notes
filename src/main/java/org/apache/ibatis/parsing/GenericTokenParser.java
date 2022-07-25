@@ -76,6 +76,8 @@ public class GenericTokenParser {
           builder.append(src, start, src.length - start);
           offset = src.length;
         } else {
+          //使用占位符 ?
+          //注意handler.handleToken()方法，这个方法是核心
           builder.append(handler.handleToken(expression.toString()));
           offset = end + closeToken.length();
         }

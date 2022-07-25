@@ -66,6 +66,7 @@ public class TextSqlNode implements SqlNode {
       this.injectionFilter = injectionFilter;
     }
 
+    //当扫描到${}的时候调用此方法  其实就是不解析 在运行时候在替换成具体的值
     @Override
     public String handleToken(String content) {
       Object parameter = context.getBindings().get("_parameter");

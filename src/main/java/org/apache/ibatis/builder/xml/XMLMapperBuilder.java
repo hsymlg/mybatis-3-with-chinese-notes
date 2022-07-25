@@ -100,6 +100,15 @@ public class XMLMapperBuilder extends BaseBuilder {
       bindMapperForNamespace();
     }
     //重新解析之前解析不了的节点。
+    //类似这种情况，select节点是需要获取resultMap的，但是此时resultMap并没有被解析到，所以解析到<select>这个节点的时候是无法获取到resultMap的信息的。
+    /*
+    <select id="demoselect" paramterType='java.lang.Integer' resultMap='demoResultMap'>
+    </select>
+    <resultMap id="demoResultMap" type="demo">
+      <id column property>
+      <result coulmn property>
+    </resultMap>
+     */
     parsePendingResultMaps();
     parsePendingCacheRefs();
     parsePendingStatements();
@@ -164,6 +173,7 @@ public class XMLMapperBuilder extends BaseBuilder {
       Iterator<ResultMapResolver> iter = incompleteResultMaps.iterator();
       while (iter.hasNext()) {
         try {
+          //添加resultMap
           iter.next().resolve();
           iter.remove();
         } catch (IncompleteElementException e) {

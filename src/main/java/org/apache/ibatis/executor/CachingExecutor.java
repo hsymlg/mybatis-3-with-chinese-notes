@@ -35,10 +35,18 @@ import org.apache.ibatis.transaction.Transaction;
 /**
  * @author Clinton Begin
  * @author Eduardo Macarron
+ * CachingExecutor 对基础执行器进行了装饰，其作用就是为查询提供二级缓存。
+ * 所谓的二级缓存是由 CachingExecutor 维护的，相对默认内置的一级缓存而言的缓存。二者区别如下：
+ * 一级缓存由基础执行器维护，且不可关闭。二级缓存的配置是开发者可干预的，在 xml 文件或注解中针对 namespace 的缓存配置就是二级缓存配置。
+ * 一级缓存在执行器中维护，即不同 sql 会话不能共享一级缓存。二级缓存则是根据 namespace 维护，不同 sql 会话是可以共享二级缓存的。
+ * CachingExecutor 中的方法大多是通过直接调用其代理的执行器来实现的，而查询操作则会先查询二级缓存。
  */
 public class CachingExecutor implements Executor {
 
   private final Executor delegate;
+  /**
+   * 缓存事务管理器
+   */
   private final TransactionalCacheManager tcm = new TransactionalCacheManager();
 
   public CachingExecutor(Executor delegate) {
@@ -92,20 +100,25 @@ public class CachingExecutor implements Executor {
   @Override
   public <E> List<E> query(MappedStatement ms, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql)
       throws SQLException {
+    // 查询二级缓存配置
     Cache cache = ms.getCache();
     if (cache != null) {
       flushCacheIfRequired(ms);
       if (ms.isUseCache() && resultHandler == null) {
+        // 当前 statement 配置使用二级缓存
         ensureNoOutParams(ms, boundSql);
         @SuppressWarnings("unchecked")
         List<E> list = (List<E>) tcm.getObject(cache, key);
         if (list == null) {
+          // 二级缓存中没用数据，调用代理执行器
           list = delegate.query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
+          // 将查询结果放入二级缓存
           tcm.putObject(cache, key, list); // issue #578 and #116
         }
         return list;
       }
     }
+    // 无二级缓存配置，调用代理执行器获取结果
     return delegate.query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
   }
 
@@ -114,9 +127,16 @@ public class CachingExecutor implements Executor {
     return delegate.flushStatements();
   }
 
+  /**
+   * 使用二级缓存要求无论是否配置了事务自动提交，在执行完成后，
+   * sql 会话必须手动提交事务才能触发事务缓存管理器维护缓存到缓存配置中，否则二级缓存无法生效。
+   * 而缓存执行器在触发事务提交时，不仅会调用事务缓存管理器提交，还会调用代理执行器提交事务
+   */
   @Override
   public void commit(boolean required) throws SQLException {
+    // 代理执行器提交
     delegate.commit(required);
+    // 事务缓存管理器提交
     tcm.commit();
   }
 
@@ -164,6 +184,8 @@ public class CachingExecutor implements Executor {
   private void flushCacheIfRequired(MappedStatement ms) {
     Cache cache = ms.getCache();
     if (cache != null && ms.isFlushCacheRequired()) {
+      // 存在 namespace 对应的缓存配置，且当前 statement 配置了刷新缓存，执行清空缓存操作
+      // 非 select 语句配置了默认刷新
       tcm.clear(cache);
     }
   }

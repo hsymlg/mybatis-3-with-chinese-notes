@@ -61,11 +61,17 @@ public class TransactionalCache implements Cache {
     return delegate.getSize();
   }
 
+  /**
+   * 查询缓存时，如果缓存未命中，则将对应的 key 放入未命中队列，执行数据库查询完毕后写缓存时并不是立刻写到缓存配置的本地容器中，
+   * 而是暂时放入待提交队列中，当触发事务提交时才将提交队列中的缓存数据写到缓存配置中。
+   * 如果发生回滚，则提交队列中的数据会被清空，从而保证了数据的一致性。
+   */
   @Override
   public Object getObject(Object key) {
     // issue #116
     Object object = delegate.getObject(key);
     if (object == null) {
+      // 放入未命中缓存的 key 的队列
       entriesMissedInCache.add(key);
     }
     // issue #146
@@ -78,6 +84,7 @@ public class TransactionalCache implements Cache {
 
   @Override
   public void putObject(Object key, Object object) {
+    // 缓存先写入待提交容器
     entriesToAddOnCommit.put(key, object);
   }
 
@@ -92,14 +99,21 @@ public class TransactionalCache implements Cache {
     entriesToAddOnCommit.clear();
   }
 
+  /**
+   * 事务提交
+   */
   public void commit() {
     if (clearOnCommit) {
       delegate.clear();
     }
+    // 提交缓存
     flushPendingEntries();
     reset();
   }
 
+  /**
+   * 事务回滚
+   */
   public void rollback() {
     unlockMissedEntries();
     reset();
@@ -111,6 +125,9 @@ public class TransactionalCache implements Cache {
     entriesMissedInCache.clear();
   }
 
+  /**
+   * 事务提交，提交待提交的缓存。
+   */
   private void flushPendingEntries() {
     for (Map.Entry<Object, Object> entry : entriesToAddOnCommit.entrySet()) {
       delegate.putObject(entry.getKey(), entry.getValue());
@@ -122,6 +139,9 @@ public class TransactionalCache implements Cache {
     }
   }
 
+  /**
+   * 事务回滚，清理未命中缓存。
+   */
   private void unlockMissedEntries() {
     for (Object entry : entriesMissedInCache) {
       try {

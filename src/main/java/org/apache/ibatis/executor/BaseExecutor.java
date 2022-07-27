@@ -248,11 +248,16 @@ public abstract class BaseExecutor implements Executor {
     return localCache.getObject(key) != null;
   }
 
+  /**
+   * 代理执行器的事务提交方法继承自 BaseExecutor，
+   * 其 commit 方法中调用了 clearLocalCache 方法清除本地一级缓存。因此二级缓存和一级缓存的使用是互斥的。
+   */
   @Override
   public void commit(boolean required) throws SQLException {
     if (closed) {
       throw new ExecutorException("Cannot commit, transaction is already closed");
     }
+    // 清除本地一级缓存
     clearLocalCache();
     flushStatements();
     if (required) {

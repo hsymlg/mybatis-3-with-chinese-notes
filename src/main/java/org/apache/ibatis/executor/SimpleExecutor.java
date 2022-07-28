@@ -33,7 +33,7 @@ import org.apache.ibatis.transaction.Transaction;
 
 /**
  * 简单执行器是 MyBatis 的默认执行器。
- * 其封装了对 JDBC 的操作，对于查询方法 doQuery 的实现如下，其主要包括创建 statement 处理器、创建 statement、执行查询、关闭 statement。
+ * 其封装了对 JDBC 的操作
  * @author Clinton Begin
  */
 public class SimpleExecutor extends BaseExecutor {
@@ -55,6 +55,9 @@ public class SimpleExecutor extends BaseExecutor {
     }
   }
 
+  /**
+   * 对于查询方法 doQuery 的实现如下，其主要包括创建 statement 处理器、创建 statement、执行查询、关闭 statement。
+   */
   @Override
   public <E> List<E> doQuery(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) throws SQLException {
     Statement stmt = null;

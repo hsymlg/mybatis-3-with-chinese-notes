@@ -43,7 +43,7 @@ public class TransactionalCacheManager {
   }
 
   /**
-   * 获取缓存
+   * 获取缓存，getObject方法中有具体逻辑
    */
   public Object getObject(Cache cache, CacheKey key) {
     return getTransactionalCache(cache).getObject(key);

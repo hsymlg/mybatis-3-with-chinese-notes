@@ -249,7 +249,7 @@ public abstract class BaseExecutor implements Executor {
   }
 
   /**
-   * 代理执行器的事务提交方法继承自 BaseExecutor，
+   * CachingExecutor的代理执行器的事务提交方法继承自 BaseExecutor，
    * 其 commit 方法中调用了 clearLocalCache 方法清除本地一级缓存。因此二级缓存和一级缓存的使用是互斥的。
    */
   @Override

@@ -117,7 +117,6 @@ public class BatchExecutor extends BaseExecutor {
   }
 
   /**
-   * 批量执行 sql
    * 执行器提交或回滚事务时会调用 doFlushStatements，从而批量执行提交的 sql 语句并最终批量关闭 statement 对象。
    */
   @Override

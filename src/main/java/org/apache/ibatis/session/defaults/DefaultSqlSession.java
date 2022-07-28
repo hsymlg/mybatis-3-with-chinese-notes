@@ -42,7 +42,9 @@ import org.apache.ibatis.session.SqlSession;
 /**
  * The default implementation for {@link SqlSession}.
  * Note that this class is not Thread-Safe.
- *
+ * 增删查改对应的操作最终会调用 selectList、selectCursor 和 update 方法，其分别用于普通查询、执行存储过程和修改数据库记录。
+ * 以上操作均是根据传入的 statement 名称到全局配置中查找对应的 MappedStatement 对象，
+ * 并将操作委托给执行器对象 executor 完成。select、selectMap 等方法则是对 selectList 方法返回的结果集做处理来实现的。
  * @author Clinton Begin
  */
 public class DefaultSqlSession implements SqlSession {
@@ -116,6 +118,9 @@ public class DefaultSqlSession implements SqlSession {
     return selectCursor(statement, parameter, RowBounds.DEFAULT);
   }
 
+  /**
+   * 调用存储过程
+   */
   @Override
   public <T> Cursor<T> selectCursor(String statement, Object parameter, RowBounds rowBounds) {
     try {
@@ -145,6 +150,9 @@ public class DefaultSqlSession implements SqlSession {
     return selectList(statement, parameter, rowBounds, Executor.NO_RESULT_HANDLER);
   }
 
+  /**
+   * 查询结果集
+   */
   private <E> List<E> selectList(String statement, Object parameter, RowBounds rowBounds, ResultHandler handler) {
     try {
       MappedStatement ms = configuration.getMappedStatement(statement);
@@ -186,6 +194,11 @@ public class DefaultSqlSession implements SqlSession {
     return update(statement, null);
   }
 
+  /**
+   * 修改
+   * 在执行 update 方法时，会设置 dirty 属性为 true ，意为事务还未提交，当事务提交或回滚后才会将 dirty 属性修改为 false。
+   * 如果当前会话不是自动提交且 dirty 属性为 true，或者设置了强制提交或回滚的标志，则会将强制标志提交给 executor 处理。
+   */
   @Override
   public int update(String statement, Object parameter) {
     try {
@@ -214,6 +227,9 @@ public class DefaultSqlSession implements SqlSession {
     commit(false);
   }
 
+  /**
+   * 提交事务
+   */
   @Override
   public void commit(boolean force) {
     try {
@@ -231,6 +247,9 @@ public class DefaultSqlSession implements SqlSession {
     rollback(false);
   }
 
+  /**
+   * 回滚事务
+   */
   @Override
   public void rollback(boolean force) {
     try {
@@ -309,6 +328,9 @@ public class DefaultSqlSession implements SqlSession {
     cursorList.add(cursor);
   }
 
+  /**
+   * 非自动提交且事务未提交 || 强制提交或回滚 时返回 true
+   */
   private boolean isCommitOrRollbackRequired(boolean force) {
     return (!autoCommit && dirty) || force;
   }

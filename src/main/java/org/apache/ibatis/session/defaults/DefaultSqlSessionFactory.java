@@ -33,6 +33,9 @@ import org.apache.ibatis.transaction.managed.ManagedTransactionFactory;
 
 /**
  * @author Clinton Begin
+ * 该类是 sql 会话创建工厂抽象接口 SqlSessionFactory 的默认实现，其提供了若干 openSession 方法用于打开一个会话，
+ * 在会话中进行相关数据库操作。这些 openSession 方法最终都会调用 openSessionFromDataSource 或 openSessionFromConnection 创建会话，
+ * 即基于数据源配置创建还是基于已有连接对象创建。
  */
 public class DefaultSqlSessionFactory implements SqlSessionFactory {
 
@@ -87,15 +90,24 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
     return configuration;
   }
 
+  /**
+   * 要使用数据源打开一个会话需要先从全局配置中获取当前生效的数据源环境配置，如果没有生效配置或没用设置可用的事务工厂，
+   * 就会创建一个 ManagedTransactionFactory 实例作为默认事务工厂实现，
+   * 其与 MyBatis 提供的另一个事务工厂实现 JdbcTransactionFactory 的区别在于
+   * 其生成的事务实现 ManagedTransaction 的提交和回滚方法是空实现，即希望将事务管理交由外部容器管理。
+   */
   private SqlSession openSessionFromDataSource(ExecutorType execType, TransactionIsolationLevel level, boolean autoCommit) {
     Transaction tx = null;
     try {
       //对SqlSession对象进行进一步加工封装
       final Environment environment = configuration.getEnvironment();
+      // 获取事务工厂
       final TransactionFactory transactionFactory = getTransactionFactoryFromEnvironment(environment);
+      // 创建事务配置
       tx = transactionFactory.newTransaction(environment.getDataSource(), level, autoCommit);
+      // 创建执行器
       final Executor executor = configuration.newExecutor(tx, execType);
-      //构建SqlSession对象
+      //获取到事务工厂配置和执行器对象后会结合传入的数据源自动提交属性创建 DefaultSqlSession，即 sql 会话对象。
       return new DefaultSqlSession(configuration, executor, autoCommit);
     } catch (Exception e) {
       closeTransaction(tx); // may have fetched a connection so lets call close()
@@ -105,8 +117,12 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
     }
   }
 
+  /**
+   * 基于连接创建会话的流程大致与基于数据源配置创建相同，区别在于自动提交属性 autoCommit 是从连接对象本身获取的。
+   */
   private SqlSession openSessionFromConnection(ExecutorType execType, Connection connection) {
     try {
+      // 获取自动提交配置
       boolean autoCommit;
       try {
         autoCommit = connection.getAutoCommit();
@@ -116,9 +132,13 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
         autoCommit = true;
       }
       final Environment environment = configuration.getEnvironment();
+      // 获取事务工厂
       final TransactionFactory transactionFactory = getTransactionFactoryFromEnvironment(environment);
+      // 创建事务配置
       final Transaction tx = transactionFactory.newTransaction(connection);
+      // 创建执行器
       final Executor executor = configuration.newExecutor(tx, execType);
+      // 创建 sql 会话
       return new DefaultSqlSession(configuration, executor, autoCommit);
     } catch (Exception e) {
       throw ExceptionFactory.wrapException("Error opening session.  Cause: " + e, e);
@@ -127,8 +147,12 @@ public class DefaultSqlSessionFactory implements SqlSessionFactory {
     }
   }
 
+  /**
+   * 获取生效数据源环境配置的事务工厂
+   */
   private TransactionFactory getTransactionFactoryFromEnvironment(Environment environment) {
     if (environment == null || environment.getTransactionFactory() == null) {
+      // 未配置数据源环境或事务工厂，默认使用 ManagedTransactionFactory
       return new ManagedTransactionFactory();
     }
     return environment.getTransactionFactory();

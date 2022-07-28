@@ -27,7 +27,7 @@ import org.apache.ibatis.session.defaults.DefaultSqlSessionFactory;
 
 /**
  * Builds {@link SqlSession} instances.
- *
+ * SqlSessionFactoryBuilder 经过复杂的解析逻辑之后，会根据全局配置创建 DefaultSqlSessionFactory
  * @author Clinton Begin
  */
 public class SqlSessionFactoryBuilder {

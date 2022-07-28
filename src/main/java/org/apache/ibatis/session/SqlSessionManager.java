@@ -31,14 +31,32 @@ import org.apache.ibatis.reflection.ExceptionUtil;
 
 /**
  * @author Larry Meadors
+ * SqlSessionManager 同时实现了 SqlSessionFactory 和 SqlSession 接口，使得其既能够创建 sql 会话，又能够执行 sql 会话的相关数据库操作
+ * SqlSessionManager 需要为每个线程维护会话对象，是因为 DefaultSqlSession 是非线程安全的，
+ * 多线程操作会导致执行错误。如dirty属性，其修改是没有经过任何同步操作的。
  */
 public class SqlSessionManager implements SqlSessionFactory, SqlSession {
 
+  /**
+   * sql 会话创建工厂
+   */
   private final SqlSessionFactory sqlSessionFactory;
+  /**
+   * sql 会话代理对象
+   * 执行 sql 会话的操作由 sqlSessionProxy 对象完成，这是一个由 JDK 动态代理创建的对象，
+   * 当执行方法时会去 ThreadLocal 对象中查找当前线程有没有对应的 sql 会话对象，
+   * 如果有则使用已有的会话对象执行，否则创建新的会话对象执行，而线程对应的会话对象需要使用 startManagedSession 方法来维护。
+   */
   private final SqlSession sqlSessionProxy;
 
+  /**
+   * 保存线程对应 sql 会话
+   */
   private final ThreadLocal<SqlSession> localSqlSession = new ThreadLocal<>();
 
+  /**
+   * SqlSessionManager 的构造方法要求 SqlSessionFactory 对象作为入参传入，其各个创建会话的方法实际是由该传入对象完成的。
+   */
   private SqlSessionManager(SqlSessionFactory sqlSessionFactory) {
     this.sqlSessionFactory = sqlSessionFactory;
     this.sqlSessionProxy = (SqlSession) Proxy.newProxyInstance(
@@ -75,6 +93,9 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
     return new SqlSessionManager(sqlSessionFactory);
   }
 
+  /**
+   * 设置当前线程对应的 sql 会话
+   */
   public void startManagedSession() {
     this.localSqlSession.set(openSession());
   }
@@ -337,6 +358,9 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
     }
   }
 
+  /**
+   * sql 会话代理逻辑
+   */
   private class SqlSessionInterceptor implements InvocationHandler {
     public SqlSessionInterceptor() {
         // Prevent Synthetic Access
@@ -344,6 +368,7 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+      // 获取当前线程对应的 sql 会话对象并执行对应方法
       final SqlSession sqlSession = SqlSessionManager.this.localSqlSession.get();
       if (sqlSession != null) {
         try {
@@ -354,6 +379,7 @@ public class SqlSessionManager implements SqlSessionFactory, SqlSession {
       } else {
         try (SqlSession autoSqlSession = openSession()) {
           try {
+            // 如果当前线程没有对应的 sql 会话，默认创建不自动提交的 sql 会话
             final Object result = method.invoke(autoSqlSession, args);
             autoSqlSession.commit();
             return result;
